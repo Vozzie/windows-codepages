@@ -38,8 +38,10 @@ typedef UTF32Char * UTF32Ptr;
 #define CODEPAGE_ERROR_INVALID_ARGUMENTS ((size_t)-2)
 #define CODEPAGE_ERROR_INVALID_BUFFSIZE ((size_t)-3)
 
-size_t codepage_to_utf8(int codepage, ANSIPtr source, size_t source_length, UTF8Ptr target, size_t target_length, size_t * invalid_chars);
+size_t utf16_to_utf8(UTF16Ptr source, size_t source_length, UTF8Ptr target, size_t target_size, size_t * invalid_chars);
+size_t utf16_to_utf8_size(UTF16Ptr source, size_t source_length, size_t * invalid_chars);
+size_t codepage_to_utf8(int codepage, ANSIPtr source, size_t source_length, UTF8Ptr target, size_t target_size, size_t * invalid_chars);
 size_t codepage_to_utf8_size(int codepage, ANSIPtr source, size_t source_length, size_t * invalid_chars);
-size_t codepage_to_utf16(int codepage, ANSIPtr source, size_t source_length, UTF16Ptr target, size_t target_length, size_t * invalid_chars);
+size_t codepage_to_utf16(int codepage, ANSIPtr source, size_t source_length, UTF16Ptr target, size_t target_size, size_t * invalid_chars);
 
 #endif//__CODEPAGES_HEADER__

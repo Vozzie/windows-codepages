@@ -16,9 +16,8 @@ int main(int argc, char * argv[])
 	char * source;
 	size_t converted, invalid, length;
 	UTF16Char utf16target[32];
-	UTF8Char utf8target[32];
+	UTF8Char utf8target[32]; 
 	wchar_t wmessage[128];
-	char message[128];
 	source  = "\x81\x40Hello";
 	length = strlen(source);
 	wprintf(L"Length %d [%s]\n", length + 1, source);

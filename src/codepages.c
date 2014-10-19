@@ -90,7 +90,100 @@ int load_table(int codepage, ANSIPtr * tbllead, UTF16Ptr * tblpage)
 	return 0;
 }
 
-size_t codepage_to_utf8(int codepage, ANSIPtr source, size_t source_length, UTF8Ptr target, size_t target_length, size_t * invalid_chars)
+size_t utf16_to_utf8(UTF16Ptr source, size_t source_length, UTF8Ptr target, size_t target_size, size_t * invalid_chars)
+{
+	UTF16Ptr psource;
+	UTF32Char codepoint, second_unit;
+	UTF8Ptr ptarget;
+	if(source_length == 0) return 0;
+	if(source == NULL || target == NULL || target_size == 0) return CODEPAGE_ERROR_INVALID_ARGUMENTS;
+	psource = source;
+	ptarget = target;
+	if(invalid_chars != NULL) *invalid_chars = 0;
+	do {
+		codepoint = *psource;
+   		if (codepoint > 0xD7FF && codepoint < 0xDC00) 
+		{
+			second_unit = *(psource + 1);
+     		if (second_unit > 0xDBFF && second_unit < 0xE000)
+			{
+				codepoint = (codepoint << 10) + second_unit - 0x35FDC00;
+				psource++;
+			}
+		}
+		if (codepoint < 0x80)
+		{
+			if((ptarget - target) + 1 < target_size)
+			{
+				*ptarget++ = codepoint;
+			} else return CODEPAGE_ERROR_INVALID_BUFFSIZE;
+		}
+		else if (codepoint < 0x800)
+		{
+			if((ptarget - target) + 2 < target_size)
+			{
+				*ptarget++ = (codepoint >> 6) + 0xC0;
+				*ptarget++ = (codepoint & 0x3F) + 0x80;
+			} else return CODEPAGE_ERROR_INVALID_BUFFSIZE;
+		}
+		else if (codepoint < 0x10000) 
+		{
+			if((ptarget - target) + 3 < target_size)
+			{
+				*ptarget++ = (codepoint >> 12) + 0xE0;
+				*ptarget++ = ((codepoint >> 6) & 0x3F) + 0x80;
+				*ptarget++ = (codepoint & 0x3F) + 0x80;
+			} else return CODEPAGE_ERROR_INVALID_BUFFSIZE;
+		}
+		else if (codepoint < 0x110000) 
+		{
+			if((ptarget - target) + 4 < target_size)
+			{
+				*ptarget++ = (codepoint >> 18) + 0xF0;
+				*ptarget++ = ((codepoint >> 12) & 0x3F) + 0x80;
+				*ptarget++ = ((codepoint >> 6) & 0x3F) + 0x80;
+				*ptarget++ = (codepoint & 0x3F) + 0x80;
+			} else return CODEPAGE_ERROR_INVALID_BUFFSIZE;
+		}
+		else if(invalid_chars != NULL) ++*invalid_chars;
+		psource++;
+	} while(psource - source < source_length);
+	return (size_t) (ptarget - target);
+}
+
+// Takes all planes into account,... :)
+size_t utf16_to_utf8_size(UTF16Ptr source, size_t source_length, size_t * invalid_chars)
+{
+	UTF16Ptr psource;
+	UTF32Char codepoint, second_unit;
+	size_t size;
+	if(source_length == 0) return 0;
+	if(source == NULL) return CODEPAGE_ERROR_INVALID_ARGUMENTS;
+	psource = source;
+	size = 0;
+	if(invalid_chars != NULL) *invalid_chars = 0;
+	do {
+		codepoint = *psource;
+   		if (codepoint > 0xD7FF && codepoint < 0xDC00) 
+		{
+			second_unit = *(psource + 1);
+     		if (second_unit > 0xDBFF && second_unit < 0xE000)
+			{
+				codepoint = (codepoint << 10) + second_unit - 0x35FDC00;
+				psource++;
+			}
+		}
+		if (codepoint < 0x80) size += 1;
+		else if (codepoint < 0x800) size += 2;
+		else if (codepoint < 0x10000) size += 3;
+		else if (codepoint < 0x110000) size += 4;
+		else if(invalid_chars != NULL) ++*invalid_chars;
+		psource++;
+	} while(psource - source < source_length);
+	return size;
+}
+
+size_t codepage_to_utf8(int codepage, ANSIPtr source, size_t source_length, UTF8Ptr target, size_t target_size, size_t * invalid_chars)
 {
 	UTF16Ptr tblpage;
 	ANSIPtr tbllead, psource;
@@ -104,8 +197,7 @@ size_t codepage_to_utf8(int codepage, ANSIPtr source, size_t source_length, UTF8
 	if(invalid_chars != NULL) *invalid_chars = 0;
 	if(tbllead != NULL)
 	{
-		while(psource - source < source_length)
-		{
+		do {
 			if(tbllead[*psource] != 0)
 			{
 				codepoint = tblpage[((int)(*psource++)) << 8 | ((int)(*psource++))];
@@ -115,22 +207,22 @@ size_t codepage_to_utf8(int codepage, ANSIPtr source, size_t source_length, UTF8
 
 			if(codepoint < 0x80)
 			{
-				if((ptarget - target) + 1 < target_length)
+				if((ptarget - target) + 1 < target_size)
 				{
 					*ptarget++ = codepoint;
 				} else return CODEPAGE_ERROR_INVALID_BUFFSIZE;
 			}
 			else if(codepoint < 0x800)
 			{
-				if((ptarget - target) + 2 < target_length)
+				if((ptarget - target) + 2 < target_size)
 				{
 					*ptarget++ = (codepoint >> 6) + 0xC0;
 					*ptarget++ = (codepoint & 0x3F) + 0x80;
 				} else return CODEPAGE_ERROR_INVALID_BUFFSIZE;
 			}
-			else if(codepoint < 0xFFFF) 
+			else if(codepoint < 0x10000) 
 			{
-				if((ptarget - target) + 3 < target_length)
+				if((ptarget - target) + 3 < target_size)
 				{
 					*ptarget++ = (codepoint >> 12) + 0xE0;
 					*ptarget++ = ((codepoint >> 6) & 0x3F) + 0x80;
@@ -138,31 +230,30 @@ size_t codepage_to_utf8(int codepage, ANSIPtr source, size_t source_length, UTF8
 				} else return CODEPAGE_ERROR_INVALID_BUFFSIZE;
 			}
 			else if(invalid_chars != NULL) ++*invalid_chars; 
-		}
+		} while(psource - source < source_length);
 	}	
 	else
 	{
-		while(psource - source < source_length)
-		{
+		do {
 			codepoint = tblpage[*psource++];
 			if(codepoint < 0x80)
 			{
-				if((ptarget - target) + 1 < target_length)
+				if((ptarget - target) + 1 < target_size)
 				{
 					*ptarget++ = codepoint;
 				} else return CODEPAGE_ERROR_INVALID_BUFFSIZE;
 			}
 			else if(codepoint < 0x800)
 			{
-				if((ptarget - target) + 2 < target_length)
+				if((ptarget - target) + 2 < target_size)
 				{
 					*ptarget++ = (codepoint >> 6) + 0xC0;
 					*ptarget++ = (codepoint & 0x3F) + 0x80;
 				} else return CODEPAGE_ERROR_INVALID_BUFFSIZE;
 			}
-			else if(codepoint < 0xFFFF) 
+			else if(codepoint < 0x10000) 
 			{
-				if((ptarget - target) + 3 < target_length)
+				if((ptarget - target) + 3 < target_size)
 				{
 					*ptarget++ = (codepoint >> 12) + 0xE0;
 					*ptarget++ = ((codepoint >> 6) & 0x3F) + 0x80;
@@ -170,7 +261,7 @@ size_t codepage_to_utf8(int codepage, ANSIPtr source, size_t source_length, UTF8
 				} else return CODEPAGE_ERROR_INVALID_BUFFSIZE;
 			}
 			else if(invalid_chars != NULL) ++*invalid_chars; 
-		}
+		} while(psource - source < source_length);
 	}
 	return (size_t)(ptarget - target);
 }
@@ -189,8 +280,7 @@ size_t codepage_to_utf8_size(int codepage, ANSIPtr source, size_t source_length,
 	if(invalid_chars != NULL) *invalid_chars = 0;
 	if(tbllead != NULL)
 	{
-		while(psource - source < source_length)
-		{
+		do {
 			if(tbllead[*psource] != 0)
 			{
 				codepoint = tblpage[((int)(*psource++)) << 8 | ((int)(*psource++))];
@@ -199,21 +289,20 @@ size_t codepage_to_utf8_size(int codepage, ANSIPtr source, size_t source_length,
 			else codepoint = tblpage[*psource++];
 			if(codepoint == 0xFFFF) { if(invalid_chars != NULL) ++*invalid_chars; }
 			else length += (codepoint < 0x80) ? 1 : ((codepoint < 0x800) ? 2 : 3);
-		}
+		} while(psource - source < source_length);
 	}	
 	else
 	{
-		while(psource - source < source_length)
-		{
+		do {
 			codepoint = tblpage[*psource++];
 			if(codepoint == 0xFFFF) { if(invalid_chars != NULL) ++*invalid_chars; }
 			else length += (codepoint < 0x80) ? 1 : ((codepoint < 0x800) ? 2 : 3);
-		}
+		} while(psource - source < source_length);
 	}
 	return length;
 }
 
-size_t codepage_to_utf16(int codepage, ANSIPtr source, size_t source_length, UTF16Ptr target, size_t target_length, size_t * invalid_chars)
+size_t codepage_to_utf16(int codepage, ANSIPtr source, size_t source_length, UTF16Ptr target, size_t target_size, size_t * invalid_chars)
 {
 	UTF16Ptr tblpage, ptarget;
 	ANSIPtr tbllead, psource;
@@ -226,8 +315,7 @@ size_t codepage_to_utf16(int codepage, ANSIPtr source, size_t source_length, UTF
 	if(invalid_chars != NULL) *invalid_chars = 0;
 	if(tbllead != NULL)
 	{
-		while(psource - source < source_length)
-		{
+		do {
 			if(tbllead[*psource] != 0)
 			{
 				codepoint = tblpage[((int)(*psource++)) << 8 | ((int)(*psource++))];
@@ -236,18 +324,17 @@ size_t codepage_to_utf16(int codepage, ANSIPtr source, size_t source_length, UTF
 			else codepoint = tblpage[*psource++];
 			if(codepoint == 0xFFFF) { if(invalid_chars != NULL) ++*invalid_chars; }
 			else *ptarget++ = codepoint;
-			if(ptarget - target > target_length) return CODEPAGE_ERROR_INVALID_BUFFSIZE;
-		}
+			if(ptarget - target > target_size) return CODEPAGE_ERROR_INVALID_BUFFSIZE;
+		} while(psource - source < source_length);
 	}	
 	else
 	{
-		while(psource - source < source_length)
-		{
+		do {
 			codepoint = tblpage[*psource++];
 			if(codepoint == 0xFFFF) { if(invalid_chars != NULL) ++*invalid_chars; }
 			else *ptarget++ = codepoint;
-			if(ptarget - target > target_length) return CODEPAGE_ERROR_INVALID_BUFFSIZE;
-		}
+			if(ptarget - target > target_size) return CODEPAGE_ERROR_INVALID_BUFFSIZE;
+		} while(psource - source < source_length);
 	}
 	return (size_t)(ptarget - target);
 }
